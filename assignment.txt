@@ -1,0 +1,10 @@
+TangoBot - PiCam - follow a line.
+Using a TangoBot and a PiCam attached to the Raspberry Pi you will write a program that will allow the robot to follow a road made out of yellow construction paper.........and eventually, the road will turn to bread crumbs which you will also need to follow until the road continues. 
+
+Eventually, the road will dead end and you will need to have the robot stop. 
+
+Road - Bread Crumbs - Road
+
+Like the picture shown below....coming soon. 
+
+Demos of your robot performing will be done on 13th, 14th and 15th. Times will be posted. 
