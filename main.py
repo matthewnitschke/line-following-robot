@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+from picamera.array import PiRGBArray
+from picamera import PiCamera
 
 CENTER_THRESH_SIZE = 80
 
@@ -24,8 +26,14 @@ cv2.namedWindow("Main", cv2.WINDOW_NORMAL)
 
 detectionRunning = True
 robotRunning = False
-while detectionRunning:
-    img = cv2.imread("./test-images/breadcrumb.png", cv2.IMREAD_COLOR)
+
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 32
+rawCapture = PiRGBArray(camera, size=(640, 480))
+
+for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+    img = frame.array
     
     cv2.setMouseCallback("Main", mouseCall, img)
 
