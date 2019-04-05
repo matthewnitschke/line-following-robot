@@ -16,16 +16,16 @@ class Robot:
     HEADTILT = 4
     HEADTURN = 3
 
-    MAX_HEADTURN = 7900
-    MIN_HEADTURN = 4200
-    HEADTURN_INCREMENT = 50
+    MAX_HEADTURN = 7900             #maximum value of the servo to turn the head to the right
+    MIN_HEADTURN = 4200             #minimum value of the servo to turn the head to the left
+    HEADTURN_INCREMENT = 50         #amount to turn per revolution
 
-    MAX_HEADTILT = 6750
-    MIN_HEADTILT = 5650
+    MAX_HEADTILT = 6750             #maximum value of the servo to move the head up
+    MIN_HEADTILT = 5650             #minimum value of the servo to move the head dwn
     HEADTILT_INCREMENT = 50
 
-    RIGHT_TURN = 6900 #7400
-    LEFT_TURN = 5100 #2110
+    RIGHT_TURN = 6900 #7400         #servo motor speed to get the robot to turn right
+    LEFT_TURN = 5100 #2110          #servo motor speed to get the robot to turn left
 
     MOTOR_INCREMENT = 700
 
