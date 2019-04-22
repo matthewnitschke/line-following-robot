@@ -15,6 +15,9 @@ mining_marker_range = [[137, 59, 189], [255, 151, 255]]             #pink board 
 
 contour_max_size = 7500			#max sixe that contour can be when searching for a end zone marker
 
+#headed_to_mine = 1
+
+
 #yellow line is not being detected need to adjust thresholds
 mining_line_range = [[0, 110, 134], [101, 255, 239]] #<-expanded original-> #[[0, 22, 211], [81, 88, 255]] 	#yellow line
 
@@ -32,14 +35,14 @@ class Robot:
     HAND_ROTATE = 9
     HAND = 10
 
-    TURN_INCREMENTOR = 1300  #1200
+    TURN_INCREMENTOR = 1200  #1300
 
     def __init__(self):
         self.tango = maestro.Controller()
         self.setup_targets()
-#        IP = '10.200.2.215'
-#        PORT = 5010
-#        self.client = ClientSocket(IP, PORT)
+        IP = '10.200.0.190'
+        PORT = 5010
+        self.client = ClientSocket(IP, PORT)
 
     def setup_targets(self):
         targets = [
@@ -73,23 +76,28 @@ class Robot:
 
 	#method to tilt the head to detect the ice
     def tilt_head_to_ice_detect(self):
-        self.tango.setTarget(Robot.HEADTILT, 4700)
+        self.tango.setTarget(Robot.HEADTILT, 4700)   #4700
 
 	#moves the arm in front of the face to be able to detect the color
     def arm_to_face(self):
-        self.tango.setTarget(Robot.SHOULDER, 4500)				
+        self.tango.setTarget(Robot.SHOULDER, 4000)	#4500
         time.sleep(.2)
         self.tango.setTarget(Robot.MID_ARM_X, 8500)				
         self.tango.setTarget(Robot.MID_ARM_Y, 6700)
         self.tango.setTarget(Robot.LOW_ARM_Y, 8500)
         self.tango.setTarget(Robot.HAND_ROTATE, 7000)			#rotate the hand so the marker is in front of the camera
         self.open_hand()
+
+    def move_shoulder(self):
+        self.tango.setTarget(Robot.SHOULDER, 4000)
     
     #move the arm out to the drop position
     def arm_to_drop(self):
         self.tango.setTarget(Robot.MID_ARM_X, 6000)
         self.tango.setTarget(Robot.MID_ARM_Y, 6000)
         self.tango.setTarget(Robot.LOW_ARM_Y, 6000)
+        time.sleep(.2)
+        self.tango.setTarget(Robot.SHOULDER, 6000)
 
 	#close the hand
     def close_hand(self):
@@ -113,7 +121,7 @@ class Robot:
 
 	#move robot forward
     def step_forward(self):
-        self.tango.setTarget(Robot.MOTORS, 5500)
+        self.tango.setTarget(Robot.MOTORS, 5200)   #5500
         time.sleep(.5)
         self.tango.setTarget(Robot.MOTORS, 6000)
 
@@ -158,6 +166,9 @@ class RobotActions:
                 break
 
             time.sleep(.3)
+#            robot.say("still looking for that pink ice")
+#            time.sleep(5)
+        robot.say("that's the good stuff")
 
 	#drive to the human
     def goto_human(self):
@@ -173,7 +184,8 @@ class RobotActions:
 
         self.robot.tilt_head_to_face_detect()
         self.vision.detect_face()
-
+        robot.say("human detected")
+        time.sleep(.5)
         while True:
             if self.vision.face_in_thresh:
                 (_, _, face_w, face_h) = self.vision.face_bounds
@@ -187,8 +199,12 @@ class RobotActions:
                     break
 
             time.sleep(.3)
-#       robot.say("Requesting the pink ice")
+        robot.say("Requesting the pink ice")
 
+    def drop_ice(self):
+        self.robot.move_shoulder()
+        time.sleep(2)
+        self.robot.open_hand()
 
     def goto_mining_field(self):
         self.vision.detect_mining_endpoint()
@@ -196,7 +212,6 @@ class RobotActions:
         moving = True
         head_tilt = 6000			#move the head up or down to neutral
         head_tilt_increment = 200
-        headed_to_mine = 1
         while moving:
             if self.vision.mining_line_visible:		#move forward while robot can see the line for the mining zone
                 self.robot.step_forward()
@@ -212,15 +227,9 @@ class RobotActions:
             self.robot.step_forward()
             time.sleep(.5)
 
-        #announce what zone the robot is in
-        if headed_to_mine == 1:
-#           robot.say("Reached mining area")
-           headed_to_mine = 0
-        elif headed_to_mine == 0:
-#           robot.say("Reached starting area")
-
-	#look for the starting field flag
-    def look_for_start_field(self):
+	#line up for the pink goal
+    def goto_scoring_zone(self):
+        self.vision.goto_scoring_zone()
         pass
 
 
@@ -271,6 +280,36 @@ class Vision(threading.Thread):
 
         return avg_sum > min_area
 
+    def goto_scoring_zone(self):
+        self.looking_for_goal = true
+        self.current_action = "aligning_goal"
+
+    def _goto_position_for_ice_dropping(self, img, hsv_img, left_threshold, right_threshold):
+        cv2.rectangle(img, (left_threshold, -2), (right_threshold, 481), (0,0,255), 2)
+
+        in_range = cv2.inRange(hsv_img, np.array(mining_marker_range[0]), np.array(mining_marker_range[1]))
+        in_range = cv2.dilate(in_range, None, iterations=5)
+        in_range = cv2.erode(in_range, None, iterations=1)
+
+        contours, _ = cv2.findContours(in_range, 1, cv2.CHAIN_APPROX_NONE)
+        if len(contours) > 0:
+            max_contour = max(contours, key=cv2.contourArea)		#find the largest contour
+            max_contour_COG = cv2.moments(max_contour)			#find the center of the largest contour
+            _, _, w, h = cv2.boundingRect(max_contour)
+            contourArea = w*h
+            if contourArea >= contour_max_size:   #7500:					#only look at contours greater than 7500
+                cv2.drawContours(img, max_contour, -1, (0, 255, 0), 2)	#draw all the contours on the ROI image
+
+                # print(contourArea)
+                if max_contour_COG != None and max_contour_COG['m00'] != 0:
+                    cx = int(max_contour_COG['m10'] / max_contour_COG['m00'])		#find the x value of the center of the contour
+                    self.mining_endpoint_in_thresh = cx >= left_threshold and cx <= right_threshold
+                    print("goal in threshold")
+                    print(self.mining_endpoint_in_thresh)
+                else:
+                    self.mining_endpoint_in_thresh = False
+
+
 	#detect west end of field marker
     def _run_detect_endpoint_marker(self, img, hsv_img, left_threshold, right_threshold):
         cv2.rectangle(img, (left_threshold, -2), (right_threshold, 481), (0,0,255), 2)
@@ -300,7 +339,7 @@ class Vision(threading.Thread):
             self.mining_endpoint_in_thresh = False
 
         self.mining_line_visible = self._color_detected(hsv_img, mining_line_range, 0) #100
-        print("mining line visible:")
+        print("mining line visible")
         print(self.mining_line_visible)
 
     def run(self):
@@ -328,6 +367,9 @@ class Vision(threading.Thread):
 
             cv2.setMouseCallback("Main", mouseCall, hsv_img)
 
+            if (self.current_action == "aligning_goal"):
+                self._goto_position_for_ice_dropping(img, hsv_img, left_threshold, right_threshold)
+
             if (self.current_action == "detect-endpoint-marker"):
                 self._run_detect_endpoint_marker(img, hsv_img, left_threshold, right_threshold)
 
@@ -351,8 +393,8 @@ class Vision(threading.Thread):
             if (self.current_action == "detect-ice"):
                 hand_x1 = 160
                 hand_y1 = 80
-                hand_x2 = 377
-                hand_y2 = 174
+                hand_x2 = 450   #377
+                hand_y2 = 300   #174
                 hand_roi = hsv_img[hand_y1:hand_y2, hand_x1:hand_x2]
 
                 # pink_inRange = cv2.inRange(hand_roi, np.array(pink_range[0]), np.array(pink_range[1]))
@@ -380,21 +422,28 @@ vision.start()
 
 robotActions = RobotActions(robot, vision)
 
-#robotActions.goto_mining_field()
-#robotActions.goto_human()
-#robotActions.accept_ice()
+robotActions.goto_mining_field()
+robot.say("Reached mining area")
+time.sleep(2)
+robot.say("looking for human")
+
+robotActions.goto_human()
+
+robotActions.accept_ice()
 
 #change the size of the contour being looked for to start looking for the scoring box
-print(contour_max_size)
+#print(contour_max_size)
 contour_max_size = 1500
-print(contour_max_size)
+#print(contour_max_size)
 
 #run the mining field function with the smaller contour
 #change color of mining line to starting line color
-#mining_line_range = [[0, 110, 134], [101, 255, 239]] #<-expanded original-> #[[0, 22, 211], [81, 88, 255]] 	#yellow line
+mining_line_range = [[0, 22, 211], [81, 88, 255]]  #[[0, 110, 134], [101, 255, 239]] #<-expanded original-> #[[0, 22, 211], [81, 88, 255]] 	#yellow line
 robotActions.goto_mining_field()
+robot.say("Reached starting area")
 
 #after robot is in the starting zone look for the scoring zone and center the robot on the mass to be ready to drop ice
-# robotActions.goto_start_field()
-# robotActions.goto_scoring_zone()
-# robotActions.drop_ice()
+## robotActions.goto_start_field()
+## robotActions.goto_scoring_zone()
+
+robotActions.drop_ice()
